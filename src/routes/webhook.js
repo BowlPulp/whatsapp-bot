@@ -6,15 +6,22 @@ const dayjs = require('dayjs');
 const router = express.Router();
 
 router.post('/', async (req, res) => {
-  const { from, text } = req.body;
+  const from = req.body.From?.replace('whatsapp:', '');
+  const text = req.body.Body;
+
+  if (!from || !text) {
+    return res.send('<Response></Response>');
+  }
 
   const reply = await handleMessage(from, text);
 
-  return res.json({
-    reply
-  });
+  res.type('text/xml');
+  res.send(`
+    <Response>
+      <Message>${reply}</Message>
+    </Response>
+  `);
 });
-
 module.exports = router;
 
 

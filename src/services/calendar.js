@@ -12,9 +12,9 @@ const calendar = google.calendar({ version: 'v3', auth });
 
 console.log('Using calendar:', CALENDAR_ID);
 
-/**
- * Fetch free 30-minute slots from Google Calendar
- */
+/* =====================================================
+   FETCH FREE 30-MINUTE SLOTS
+   ===================================================== */
 async function getFreeSlots(date) {
   const start = dayjs(date).hour(10).minute(0).second(0);
   const end = dayjs(date).hour(20).minute(0).second(0);
@@ -55,15 +55,86 @@ async function getFreeSlots(date) {
   return slots;
 }
 
-/**
- * Create a confirmed appointment in Google Calendar
- */
-async function createAppointment({ date, start, end, patient = 'Patient' }) {
+/* =====================================================
+   CREATE APPOINTMENT (WITH METADATA)
+   ===================================================== */
+async function createAppointment({
+  date,
+  start,
+  end,
+  patient,
+  phone,
+  visitType,
+  isFirstVisit
+}) {
   await calendar.events.insert({
     calendarId: CALENDAR_ID,
     requestBody: {
       summary: `Dental Appointment - ${patient}`,
-      description: 'Booked via WhatsApp Bot',
+      description: `
+Patient Name: ${patient}
+Phone: ${phone}
+Visit Type: ${visitType}
+Patient Type: ${isFirstVisit ? 'First-time' : 'Returning'}
+
+Booked via WhatsApp Bot
+      `.trim(),
+      location: `Call: ${phone}`,
+      extendedProperties: {
+        private: {
+          phone: phone,
+          source: 'whatsapp-bot'
+        }
+      },
+      start: {
+        dateTime: `${date}T${start}:00`,
+        timeZone: 'Asia/Kolkata'
+      },
+      end: {
+        dateTime: `${date}T${end}:00`,
+        timeZone: 'Asia/Kolkata'
+      }
+    }
+  });
+}
+
+/* =====================================================
+   FIND UPCOMING APPOINTMENT (RELIABLE)
+   ===================================================== */
+async function findUpcomingAppointment() {
+  const now = new Date().toISOString();
+
+  const res = await calendar.events.list({
+    calendarId: CALENDAR_ID,
+    timeMin: now,
+    singleEvents: true,
+    orderBy: 'startTime',
+    maxResults: 5
+  });
+
+  // Return the nearest upcoming event
+  return res.data.items[0] || null;
+}
+
+
+/* =====================================================
+   CANCEL APPOINTMENT
+   ===================================================== */
+async function cancelAppointment(eventId) {
+  await calendar.events.delete({
+    calendarId: CALENDAR_ID,
+    eventId
+  });
+}
+
+/* =====================================================
+   RESCHEDULE APPOINTMENT
+   ===================================================== */
+async function rescheduleAppointment(eventId, date, start, end) {
+  await calendar.events.patch({
+    calendarId: CALENDAR_ID,
+    eventId,
+    requestBody: {
       start: {
         dateTime: `${date}T${start}:00`,
         timeZone: 'Asia/Kolkata'
@@ -78,5 +149,8 @@ async function createAppointment({ date, start, end, patient = 'Patient' }) {
 
 module.exports = {
   getFreeSlots,
-  createAppointment
+  createAppointment,
+  findUpcomingAppointment,
+  cancelAppointment,
+  rescheduleAppointment
 };
